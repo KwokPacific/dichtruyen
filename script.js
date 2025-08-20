@@ -1,6 +1,8 @@
 class ChineseTranslator {
     constructor() {
-        this.apiEndpoint = 'https://n8n.myaloha.vn/webhook-test/translate-chinese'; // Thay đổi URL này
+        this.apiEndpoint = 'https://n8n.myaloha.vn/webhook/translate-chinese'; // n8n webhook endpoint
+        this.timeout = 30000; // 30 seconds timeout
+        this.retryAttempts = 3; // Number of retry attempts
         this.translationHistory = JSON.parse(localStorage.getItem('translationHistory') || '[]');
         this.translationCount = parseInt(localStorage.getItem('translationCount') || '0');
         this.currentTheme = localStorage.getItem('theme') || 'light';
@@ -82,37 +84,111 @@ class ChineseTranslator {
         this.showLoading(true);
         this.translateBtn.disabled = true;
 
+        // Retry logic
+        for (let attempt = 1; attempt <= this.retryAttempts; attempt++) {
+            try {
+                if (attempt > 1) {
+                    this.showLoading(true, `Đang thử lại... (lần ${attempt}/${this.retryAttempts})`, true);
+                }
+
+                const translatedText = await this.performTranslation(text, attempt);
+                const endTime = Date.now();
+                const duration = ((endTime - startTime) / 1000).toFixed(1);
+
+                this.displayResult(translatedText);
+                this.updateTranslationStats(duration, translatedText.length);
+                this.addToHistory(text, translatedText);
+                this.showToast('Dịch thành công!', 'success', 'fa-check-circle');
+                
+                this.showLoading(false);
+                this.translateBtn.disabled = false;
+                return;
+
+            } catch (error) {
+                console.error(`Translation attempt ${attempt} failed:`, error);
+                
+                // If this is the last attempt, show error
+                if (attempt === this.retryAttempts) {
+                    this.showToast(this.getErrorMessage(error), 'error', 'fa-exclamation-circle');
+                    this.displayError(this.getErrorMessage(error));
+                } else {
+                    // Show retry message
+                    this.showToast(`Thử lại lần ${attempt + 1}...`, 'warning', 'fa-sync-alt');
+                    await new Promise(resolve => setTimeout(resolve, 1000 * attempt)); // Progressive delay
+                }
+            }
+        }
+
+        this.showLoading(false);
+        this.translateBtn.disabled = false;
+    }
+
+    async performTranslation(text, attempt) {
+        // Create AbortController for timeout
+        const controller = new AbortController();
+        const timeoutId = setTimeout(() => controller.abort(), this.timeout);
+
         try {
             const response = await fetch(this.apiEndpoint, {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json',
+                    'Accept': 'application/json',
                 },
-                body: JSON.stringify({ text: text })
+                body: JSON.stringify({ text: text }),
+                signal: controller.signal
             });
 
-            const result = await response.json();
-            const endTime = Date.now();
-            const duration = ((endTime - startTime) / 1000).toFixed(1);
+            clearTimeout(timeoutId);
 
-            if (response.ok && result.success !== false) {
-                const translatedText = result.text || result.translatedText || result;
-                this.displayResult(translatedText);
-                this.updateTranslationStats(duration, translatedText.length);
-                this.addToHistory(text, translatedText);
-                this.showToast('Dịch thành công!', 'success', 'fa-check-circle');
-            } else {
-                throw new Error(result.error?.message || 'Có lỗi xảy ra khi dịch');
+            if (!response.ok) {
+                if (response.status === 0 || response.status >= 500) {
+                    throw new Error('Lỗi server, đang thử lại...');
+                }
+                throw new Error(`HTTP ${response.status}: ${response.statusText}`);
             }
 
+            const result = await response.json();
+
+            // Handle different response formats from n8n workflow
+            if (result.success === false) {
+                throw new Error(result.error?.message || result.message || 'Workflow trả về lỗi');
+            }
+
+            // Extract translated text from various possible response formats
+            const translatedText = result.text || result.translatedText || result.data?.text || result.translation || result;
+            
+            if (typeof translatedText !== 'string' || !translatedText.trim()) {
+                throw new Error('Không nhận được kết quả dịch từ workflow');
+            }
+
+            return translatedText;
+
         } catch (error) {
-            console.error('Translation error:', error);
-            this.showToast(error.message || 'Lỗi kết nối đến server', 'error', 'fa-exclamation-circle');
-            this.displayError(error.message);
-        } finally {
-            this.showLoading(false);
-            this.translateBtn.disabled = false;
+            clearTimeout(timeoutId);
+            
+            if (error.name === 'AbortError') {
+                throw new Error('Thời gian chờ quá lâu, vui lòng thử lại');
+            }
+            
+            throw error;
         }
+    }
+
+    getErrorMessage(error) {
+        if (error.message.includes('fetch')) {
+            return 'Lỗi kết nối đến n8n workflow. Kiểm tra CORS và network.';
+        }
+        if (error.message.includes('HTTP 404')) {
+            return 'Không tìm thấy webhook n8n. Kiểm tra đường dẫn API.';
+        }
+        if (error.message.includes('HTTP 500')) {
+            return 'Lỗi server n8n. Vui lòng thử lại sau.';
+        }
+        if (error.message.includes('timeout') || error.message.includes('Thời gian chờ')) {
+            return 'Hết thời gian chờ. Workflow có thể đang xử lý quá lâu.';
+        }
+        return error.message || 'Có lỗi không xác định xảy ra';
     }
 
     displayResult(translatedText) {
@@ -156,11 +232,35 @@ class ChineseTranslator {
         }
     }
 
-    showLoading(show) {
+    showLoading(show, message = null, isRetry = false) {
         if (show) {
             this.loadingOverlay.classList.add('show');
+            
+            // Update loading message if provided
+            if (message) {
+                const loadingContent = this.loadingOverlay.querySelector('.loading-content');
+                const existingMessage = loadingContent.querySelector('.loading-message');
+                
+                if (existingMessage) {
+                    existingMessage.textContent = message;
+                } else {
+                    const messageElement = document.createElement('p');
+                    messageElement.className = 'loading-message';
+                    messageElement.textContent = message;
+                    messageElement.style.marginTop = '1rem';
+                    messageElement.style.fontWeight = '500';
+                    if (isRetry) messageElement.style.color = 'var(--warning-color)';
+                    loadingContent.appendChild(messageElement);
+                }
+            }
         } else {
             this.loadingOverlay.classList.remove('show');
+            
+            // Remove any custom loading message
+            const existingMessage = this.loadingOverlay.querySelector('.loading-message');
+            if (existingMessage) {
+                existingMessage.remove();
+            }
         }
     }
 
