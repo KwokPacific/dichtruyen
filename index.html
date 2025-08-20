@@ -1,0 +1,124 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Dịch Truyện Trung Quốc - AI Translation</title>
+    <link rel="stylesheet" href="style.css">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
+</head>
+<body>
+    <div class="container">
+        <!-- Header -->
+        <header class="header">
+            <div class="header-content">
+                <h1 class="title">
+                    <i class="fas fa-language"></i>
+                    Dịch Truyện Trung Quốc
+                </h1>
+                <p class="subtitle">Powered by Gemini Pro 2.5 & n8n</p>
+                <button class="theme-toggle" id="themeToggle">
+                    <i class="fas fa-moon"></i>
+                </button>
+            </div>
+        </header>
+
+        <!-- Main Content -->
+        <main class="main-content">
+            <div class="translation-container">
+                <!-- Input Section -->
+                <div class="input-section">
+                    <div class="section-header">
+                        <h2><i class="fas fa-edit"></i> Văn bản tiếng Trung</h2>
+                        <div class="char-count">
+                            <span id="charCount">0</span> ký tự
+                        </div>
+                    </div>
+                    <textarea 
+                        id="inputText" 
+                        placeholder="Nhập văn bản tiếng Trung cần dịch vào đây..."
+                        maxlength="5000"
+                    ></textarea>
+                    <div class="input-tools">
+                        <button class="btn-clear" id="clearBtn">
+                            <i class="fas fa-trash"></i> Xóa
+                        </button>
+                        <button class="btn-translate" id="translateBtn">
+                            <i class="fas fa-exchange-alt"></i>
+                            <span>Dịch ngay</span>
+                        </button>
+                    </div>
+                </div>
+
+                <!-- Output Section -->
+                <div class="output-section">
+                    <div class="section-header">
+                        <h2><i class="fas fa-file-text"></i> Kết quả dịch</h2>
+                        <button class="btn-copy" id="copyBtn" disabled>
+                            <i class="fas fa-copy"></i> Copy
+                        </button>
+                    </div>
+                    <div class="output-area" id="outputArea">
+                        <div class="placeholder">
+                            <i class="fas fa-robot"></i>
+                            <p>Kết quả dịch sẽ hiển thị ở đây...</p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Statistics -->
+            <div class="stats-section">
+                <div class="stat-item">
+                    <i class="fas fa-clock"></i>
+                    <span>Thời gian dịch</span>
+                    <strong id="translationTime">--</strong>
+                </div>
+                <div class="stat-item">
+                    <i class="fas fa-chart-line"></i>
+                    <span>Độ dài</span>
+                    <strong id="translationLength">--</strong>
+                </div>
+                <div class="stat-item">
+                    <i class="fas fa-history"></i>
+                    <span>Lần dịch</span>
+                    <strong id="translationCount">0</strong>
+                </div>
+            </div>
+
+            <!-- History Section -->
+            <div class="history-section" id="historySection">
+                <div class="section-header">
+                    <h2><i class="fas fa-history"></i> Lịch sử dịch</h2>
+                    <button class="btn-clear-history" id="clearHistoryBtn">
+                        <i class="fas fa-trash"></i> Xóa lịch sử
+                    </button>
+                </div>
+                <div class="history-list" id="historyList">
+                    <div class="no-history">
+                        <i class="fas fa-inbox"></i>
+                        <p>Chưa có lịch sử dịch</p>
+                    </div>
+                </div>
+            </div>
+        </main>
+
+        <!-- Loading Overlay -->
+        <div class="loading-overlay" id="loadingOverlay">
+            <div class="loading-content">
+                <div class="spinner"></div>
+                <h3>Đang dịch...</h3>
+                <p>Gemini Pro 2.5 đang xử lý văn bản của bạn</p>
+            </div>
+        </div>
+
+        <!-- Toast Notifications -->
+        <div class="toast-container" id="toastContainer"></div>
+    </div>
+
+    <script src="script.js"></script>
+</body>
+</html>
