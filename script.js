@@ -1,6 +1,6 @@
 class ChineseTranslator {
     constructor() {
-        this.apiEndpoint = 'https://n8n.myaloha.vn/webhook-test/ChineseTranslator'; // Thay đổi URL này
+        this.apiEndpoint = 'https://n8n.myaloha.vn/webhook-test/translate-chinese'; // Thay đổi URL này
         this.translationHistory = JSON.parse(localStorage.getItem('translationHistory') || '[]');
         this.translationCount = parseInt(localStorage.getItem('translationCount') || '0');
         this.currentTheme = localStorage.getItem('theme') || 'light';
