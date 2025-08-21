@@ -91,7 +91,13 @@ class ChineseTranslator {
                 body: JSON.stringify({ text: text })
             });
 
-            const result = await response.json();
+            const responseText = await response.text();
+    let result;
+    try {
+        result = JSON.parse(responseText);   // Nếu server trả JSON
+    } catch {
+        result = { text: responseText, success: true }; // Nếu server trả text thuần
+    }
             const endTime = Date.now();
             const duration = ((endTime - startTime) / 1000).toFixed(1);
 
