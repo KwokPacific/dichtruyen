@@ -63,63 +63,74 @@ class ChineseTranslator {
         }
     }
 
-    async translateText() {
-        const text = this.inputText.value.trim();
-        
-        if (!text) {
-            this.showToast('Vui lòng nhập văn bản cần dịch', 'warning', 'fa-exclamation-triangle');
-            return;
-        }
-
-        // Kiểm tra có ký tự tiếng Trung không
-        const chineseRegex = /[\u4e00-\u9fff]/;
-        if (!chineseRegex.test(text)) {
-            this.showToast('Văn bản phải chứa ký tự tiếng Trung', 'error', 'fa-times-circle');
-            return;
-        }
-
-        const startTime = Date.now();
-        this.showLoading(true);
-        this.translateBtn.disabled = true;
-
-        try {
-            const response = await fetch(this.apiEndpoint, {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                },
-                body: JSON.stringify({ text: text })
-            });
-
-            const responseText = await response.text();
-            let result;
-            try {
-                result = JSON.parse(responseText);   // Nếu server trả JSON
-            } catch {
-                result = responseText;               // Nếu server trả text thuần
-            }
-            const endTime = Date.now();
-            const duration = ((endTime - startTime) / 1000).toFixed(1);
-
-            if (response.ok && result.success !== false) {
-                const translatedText = result.text || result.translatedText || result;
-                this.displayResult(translatedText);
-                this.updateTranslationStats(duration, translatedText.length);
-                this.addToHistory(text, translatedText);
-                this.showToast('Dịch thành công!', 'success', 'fa-check-circle');
-            } else {
-                throw new Error(result.error?.message || 'Có lỗi xảy ra khi dịch');
-            }
-
-        } catch (error) {
-            console.error('Translation error:', error);
-            this.showToast(error.message || 'Lỗi kết nối đến server', 'error', 'fa-exclamation-circle');
-            this.displayError(error.message);
-        } finally {
-            this.showLoading(false);
-            this.translateBtn.disabled = false;
-        }
+    // Sửa hàm translateText()
+async translateText() {
+    const text = this.inputText.value.trim();
+    
+    if (!text) {
+        this.showToast('Vui lòng nhập văn bản cần dịch', 'warning', 'fa-exclamation-triangle');
+        return;
     }
+
+    // Kiểm tra có ký tự tiếng Trung không
+    const chineseRegex = /[\u4e00-\u9fff]/;
+    if (!chineseRegex.test(text)) {
+        this.showToast('Văn bản phải chứa ký tự tiếng Trung', 'error', 'fa-times-circle');
+        return;
+    }
+
+    const startTime = Date.now();
+    this.showLoading(true);
+    this.translateBtn.disabled = true;
+
+    try {
+        // Debug log
+        console.log('Sending request to:', this.apiEndpoint);
+        console.log('Request body:', { text: text });
+        
+        const response = await fetch(this.apiEndpoint, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({ text: text }) // Simplified format
+        });
+
+        console.log('Response status:', response.status);
+        console.log('Response headers:', response.headers);
+
+        const responseText = await response.text();
+        console.log('Response text:', responseText);
+        
+        let result;
+        try {
+            result = JSON.parse(responseText);
+        } catch {
+            result = responseText;
+        }
+        
+        const endTime = Date.now();
+        const duration = ((endTime - startTime) / 1000).toFixed(1);
+
+        if (response.ok && result.success !== false) {
+            const translatedText = result.text || result.translatedText || result;
+            this.displayResult(translatedText);
+            this.updateTranslationStats(duration, translatedText.length);
+            this.addToHistory(text, translatedText);
+            this.showToast('Dịch thành công!', 'success', 'fa-check-circle');
+        } else {
+            throw new Error(result.error?.message || `HTTP ${response.status}: ${response.statusText}`);
+        }
+
+    } catch (error) {
+        console.error('Translation error:', error);
+        this.showToast(error.message || 'Lỗi kết nối đến server', 'error', 'fa-exclamation-circle');
+        this.displayError(error.message);
+    } finally {
+        this.showLoading(false);
+        this.translateBtn.disabled = false;
+    }
+}
 
     displayResult(translatedText) {
         this.outputArea.innerHTML = `<div class="translation-result">${this.escapeHtml(translatedText)}</div>`;
