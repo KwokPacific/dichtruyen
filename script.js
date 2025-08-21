@@ -92,21 +92,44 @@ class ChineseTranslator {
             });
 
             const responseText = await response.text();
-    let result;
-    try {
-        result = JSON.parse(responseText);   // Nếu server trả JSON
-    } catch {
-        result = { text: responseText, success: true }; // Nếu server trả text thuần
-    }
-            const endTime = Date.now();
-            const duration = ((endTime - startTime) / 1000).toFixed(1);
+let result;
+try {
+    result = JSON.parse(responseText);   // Nếu server trả JSON
+} catch {
+    result = responseText;               // Nếu server trả text thuần
+}
 
-            if (response.ok && result.success !== false) {
-                const translatedText = result.text || result.translatedText || result;
-                this.displayResult(translatedText);
-                this.updateTranslationStats(duration, translatedText.length);
-                this.addToHistory(text, translatedText);
-                this.showToast('Dịch thành công!', 'success', 'fa-check-circle');
+const endTime = Date.now();
+const duration = ((endTime - startTime) / 1000).toFixed(1);
+
+// Kiểm tra HTTP status trước
+if (!response.ok) {
+    const serverMsg = (typeof result === 'object')
+        ? (result?.error?.message || result?.message || result?.text)
+        : result;
+    throw new Error(serverMsg || `HTTP ${response.status} ${response.statusText}`);
+}
+
+// Chuẩn hóa dữ liệu để luôn có translatedText
+let translatedText = '';
+if (typeof result === 'object') {
+    if (result.success === false) {
+        const msg = result?.error?.message || result?.message || 'Có lỗi xảy ra khi dịch';
+        throw new Error(msg);
+    }
+    translatedText = result.text || result.translatedText || result.result || '';
+} else {
+    translatedText = result; // text thuần
+}
+
+if (!translatedText) {
+    translatedText = responseText; // fallback cuối
+}
+
+this.displayResult(translatedText);
+this.updateTranslationStats(duration, translatedText.length);
+this.addToHistory(text, translatedText);
+this.showToast('Dịch thành công!', 'success', 'fa-check-circle');
             } else {
                 throw new Error(result.error?.message || 'Có lỗi xảy ra khi dịch');
             }
