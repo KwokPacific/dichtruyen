@@ -88,11 +88,29 @@ class ChineseTranslator {
                 headers: {
                     'Content-Type': 'application/json',
                 },
-                body: JSON.stringify({ body: { text: inputText } })
+                body: JSON.stringify({ text: text })
             });
 
             const responseText = await response.text();
             let result;
+            
+            // Check for HTTP errors first
+            if (!response.ok) {
+                let errorMessage = `HTTP ${response.status}: ${response.statusText}`;
+                
+                try {
+                    const errorData = JSON.parse(responseText);
+                    errorMessage = errorData.error?.message || errorData.message || errorMessage;
+                } catch {
+                    // If response is not JSON, use the text as error message if available
+                    if (responseText.trim()) {
+                        errorMessage = responseText;
+                    }
+                }
+                
+                throw new Error(errorMessage);
+            }
+            
             try {
                 result = JSON.parse(responseText);   // Nếu server trả JSON
             } catch {
@@ -101,8 +119,14 @@ class ChineseTranslator {
             const endTime = Date.now();
             const duration = ((endTime - startTime) / 1000).toFixed(1);
 
-            if (response.ok && result.success !== false) {
+            if (result.success !== false) {
                 const translatedText = result.text || result.translatedText || result;
+                
+                // Validate that we have a valid translation result
+                if (!translatedText || typeof translatedText !== 'string' || translatedText.trim() === '') {
+                    throw new Error('Không nhận được kết quả dịch hợp lệ từ server');
+                }
+                
                 this.displayResult(translatedText);
                 this.updateTranslationStats(duration, translatedText.length);
                 this.addToHistory(text, translatedText);
