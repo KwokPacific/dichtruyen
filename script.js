@@ -92,44 +92,21 @@ class ChineseTranslator {
             });
 
             const responseText = await response.text();
-let result;
-try {
-    result = JSON.parse(responseText);   // Nếu server trả JSON
-} catch {
-    result = responseText;               // Nếu server trả text thuần
-}
+            let result;
+            try {
+                result = JSON.parse(responseText);   // Nếu server trả JSON
+            } catch {
+                result = responseText;               // Nếu server trả text thuần
+            }
+            const endTime = Date.now();
+            const duration = ((endTime - startTime) / 1000).toFixed(1);
 
-const endTime = Date.now();
-const duration = ((endTime - startTime) / 1000).toFixed(1);
-
-// Kiểm tra HTTP status trước
-if (!response.ok) {
-    const serverMsg = (typeof result === 'object')
-        ? (result?.error?.message || result?.message || result?.text)
-        : result;
-    throw new Error(serverMsg || `HTTP ${response.status} ${response.statusText}`);
-}
-
-// Chuẩn hóa dữ liệu để luôn có translatedText
-let translatedText = '';
-if (typeof result === 'object') {
-    if (result.success === false) {
-        const msg = result?.error?.message || result?.message || 'Có lỗi xảy ra khi dịch';
-        throw new Error(msg);
-    }
-    translatedText = result.text || result.translatedText || result.result || '';
-} else {
-    translatedText = result; // text thuần
-}
-
-if (!translatedText) {
-    translatedText = responseText; // fallback cuối
-}
-
-this.displayResult(translatedText);
-this.updateTranslationStats(duration, translatedText.length);
-this.addToHistory(text, translatedText);
-this.showToast('Dịch thành công!', 'success', 'fa-check-circle');
+            if (response.ok && result.success !== false) {
+                const translatedText = result.text || result.translatedText || result;
+                this.displayResult(translatedText);
+                this.updateTranslationStats(duration, translatedText.length);
+                this.addToHistory(text, translatedText);
+                this.showToast('Dịch thành công!', 'success', 'fa-check-circle');
             } else {
                 throw new Error(result.error?.message || 'Có lỗi xảy ra khi dịch');
             }
@@ -209,7 +186,29 @@ this.showToast('Dịch thành công!', 'success', 'fa-check-circle');
         }
     }
 
-    updateTranslationStats(time, length) {
+    
+    // Chuẩn hoá mọi kiểu dữ liệu về chuỗi hiển thị
+    toPlainText(value) {
+        if (value === null || value === undefined) return '';
+        if (typeof value === 'string') return value;
+        if (Array.isArray(value)) {
+            return value.map(v => this.toPlainText(v)).join('\n');
+        }
+        if (typeof value === 'object') {
+            // Ưu tiên một số khóa thường gặp
+            const preferredKeys = ['text', 'translatedText', 'result', 'output', 'message', 'content'];
+            for (const k of preferredKeys) {
+                if (typeof value[k] === 'string') return value[k];
+            }
+            // Thử gom các giá trị con là string
+            const collected = Object.values(value).map(v => this.toPlainText(v)).filter(Boolean).join('\n');
+            if (collected) return collected;
+            try { return JSON.stringify(value); } catch { return String(value); }
+        }
+        return String(value);
+    }
+
+updateTranslationStats(time, length) {
         this.translationTime.textContent = `${time}s`;
         this.translationLength.textContent = `${length} ký tự`;
         this.translationCount++;
@@ -222,6 +221,8 @@ this.showToast('Dịch thành công!', 'success', 'fa-check-circle');
     }
 
     addToHistory(originalText, translatedText) {
+        originalText = this.toPlainText(originalText);
+        translatedText = this.toPlainText(translatedText);
         const historyItem = {
             id: Date.now(),
             timestamp: new Date().toLocaleString('vi-VN'),
