@@ -64,6 +64,7 @@ class ChineseTranslator {
     }
 
     // Sửa hàm translateText()
+// Sửa hàm translateText()
 async translateText() {
     const text = this.inputText.value.trim();
     
