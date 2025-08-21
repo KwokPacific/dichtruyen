@@ -88,7 +88,7 @@ class ChineseTranslator {
                 headers: {
                     'Content-Type': 'application/json',
                 },
-                body: JSON.stringify({ text: text })
+                body: JSON.stringify({ body: { text: text } })
             });
 
             const responseText = await response.text();
