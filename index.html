@@ -5,6 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Dịch Truyện Trung Quốc - AI Translation</title>
     <link rel="stylesheet" href="style.css">
+    <link rel="stylesheet" href="enhanced-style.css">
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
@@ -26,45 +27,211 @@
             </div>
         </header>
 
-        <!-- Main Content -->
-        <main class="main-content">
-            <div class="translation-container">
-                <!-- Input Section -->
-                <div class="input-section">
-                    <div class="section-header">
-                        <h2><i class="fas fa-edit"></i> Văn bản tiếng Trung</h2>
-                        <div class="char-count">
-                            <span id="charCount">0</span> ký tự
-                        </div>
+        <!-- Settings Panel -->
+        <div class="settings-panel" id="settingsPanel">
+            <div class="settings-content">
+                <div class="settings-header">
+                    <h3><i class="fas fa-cog"></i> Cài đặt dịch thuật</h3>
+                    <button class="btn-close-settings" id="closeSettingsBtn">
+                        <i class="fas fa-times"></i>
+                    </button>
+                </div>
+                <div class="settings-body">
+                    <div class="setting-group">
+                        <label>Chế độ dịch:</label>
+                        <select id="translationMode">
+                            <option value="novel">Tiểu thuyết</option>
+                            <option value="formal">Trang trọng</option>
+                            <option value="casual">Thông thường</option>
+                        </select>
                     </div>
-                    <textarea 
-                        id="inputText" 
-                        placeholder="Nhập văn bản tiếng Trung cần dịch vào đây..."
-                        maxlength="5000"
-                    ></textarea>
-                    <div class="input-tools">
-                        <button class="btn-clear" id="clearBtn">
-                            <i class="fas fa-trash"></i> Xóa
-                        </button>
-                        <button class="btn-translate" id="translateBtn">
-                            <i class="fas fa-exchange-alt"></i>
-                            <span>Dịch ngay</span>
-                        </button>
+                    <div class="setting-group">
+                        <label>
+                            <input type="checkbox" id="preserveFormatting"> 
+                            Giữ nguyên định dạng
+                        </label>
+                    </div>
+                    <div class="setting-group">
+                        <label>
+                            <input type="checkbox" id="autoSave" checked> 
+                            Tự động lưu cài đặt
+                        </label>
                     </div>
                 </div>
+            </div>
+        </div>
 
-                <!-- Output Section -->
-                <div class="output-section">
-                    <div class="section-header">
-                        <h2><i class="fas fa-file-text"></i> Kết quả dịch</h2>
-                        <button class="btn-copy" id="copyBtn" disabled>
-                            <i class="fas fa-copy"></i> Copy
-                        </button>
+        <!-- Main Content -->
+        <main class="main-content">
+            <!-- Tab Navigation -->
+            <div class="tab-navigation">
+                <button class="tab-btn active" data-tab="single">
+                    <i class="fas fa-edit"></i> Dịch đơn
+                </button>
+                <button class="tab-btn" data-tab="batch">
+                    <i class="fas fa-list"></i> Dịch loạt
+                </button>
+                <button class="tab-btn" data-tab="file">
+                    <i class="fas fa-file-upload"></i> Dịch file
+                </button>
+                <button class="btn-settings" id="settingsBtn">
+                    <i class="fas fa-cog"></i> Cài đặt
+                </button>
+            </div>
+
+            <!-- Single Translation Tab -->
+            <div class="tab-content active" id="singleTab">
+                <div class="translation-container">
+                    <!-- Input Section -->
+                    <div class="input-section">
+                        <div class="section-header">
+                            <h2><i class="fas fa-edit"></i> Văn bản tiếng Trung</h2>
+                            <div class="char-count">
+                                <span id="charCount">0</span> ký tự
+                            </div>
+                        </div>
+                        <textarea 
+                            id="inputText" 
+                            placeholder="Nhập văn bản tiếng Trung cần dịch vào đây..."
+                            maxlength="5000"
+                        ></textarea>
+                        <div class="input-tools">
+                            <button class="btn-clear" id="clearBtn">
+                                <i class="fas fa-trash"></i> Xóa
+                            </button>
+                            <button class="btn-translate" id="translateBtn">
+                                <i class="fas fa-exchange-alt"></i>
+                                <span>Dịch ngay</span>
+                            </button>
+                        </div>
                     </div>
-                    <div class="output-area" id="outputArea">
-                        <div class="placeholder">
-                            <i class="fas fa-robot"></i>
-                            <p>Kết quả dịch sẽ hiển thị ở đây...</p>
+
+                    <!-- Output Section -->
+                    <div class="output-section">
+                        <div class="section-header">
+                            <h2><i class="fas fa-file-text"></i> Kết quả dịch</h2>
+                            <button class="btn-copy" id="copyBtn" disabled>
+                                <i class="fas fa-copy"></i> Copy
+                            </button>
+                        </div>
+                        <div class="output-area" id="outputArea">
+                            <div class="placeholder">
+                                <i class="fas fa-robot"></i>
+                                <p>Kết quả dịch sẽ hiển thị ở đây...</p>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Batch Translation Tab -->
+            <div class="tab-content" id="batchTab">
+                <div class="batch-container">
+                    <div class="batch-input-section">
+                        <div class="section-header">
+                            <h2><i class="fas fa-list"></i> Danh sách văn bản</h2>
+                            <div class="batch-controls">
+                                <button class="btn-add-batch" id="addBatchBtn">
+                                    <i class="fas fa-plus"></i> Thêm
+                                </button>
+                                <button class="btn-clear-batch" id="clearBatchBtn">
+                                    <i class="fas fa-trash"></i> Xóa tất cả
+                                </button>
+                            </div>
+                        </div>
+                        <div class="batch-list" id="batchList">
+                            <div class="batch-item">
+                                <textarea placeholder="Nhập văn bản tiếng Trung..." maxlength="5000"></textarea>
+                                <button class="btn-remove-batch">
+                                    <i class="fas fa-times"></i>
+                                </button>
+                            </div>
+                        </div>
+                        <div class="batch-tools">
+                            <button class="btn-translate-batch" id="translateBatchBtn">
+                                <i class="fas fa-exchange-alt"></i>
+                                <span>Dịch tất cả</span>
+                            </button>
+                        </div>
+                    </div>
+                    <div class="batch-output-section">
+                        <div class="section-header">
+                            <h2><i class="fas fa-file-text"></i> Kết quả dịch loạt</h2>
+                            <button class="btn-copy-all" id="copyAllBtn" disabled>
+                                <i class="fas fa-copy"></i> Copy tất cả
+                            </button>
+                        </div>
+                        <div class="batch-results" id="batchResults">
+                            <div class="placeholder">
+                                <i class="fas fa-robot"></i>
+                                <p>Kết quả dịch loạt sẽ hiển thị ở đây...</p>
+                            </div>
+                        </div>
+                        <div class="batch-progress" id="batchProgress" style="display: none;">
+                            <div class="progress-bar">
+                                <div class="progress-fill" id="progressFill"></div>
+                            </div>
+                            <div class="progress-text" id="progressText">0/0</div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- File Translation Tab -->
+            <div class="tab-content" id="fileTab">
+                <div class="file-container">
+                    <div class="file-upload-section">
+                        <div class="section-header">
+                            <h2><i class="fas fa-file-upload"></i> Tải lên file</h2>
+                        </div>
+                        <div class="file-drop-zone" id="fileDropZone">
+                            <i class="fas fa-cloud-upload-alt"></i>
+                            <h3>Kéo thả file vào đây</h3>
+                            <p>hoặc click để chọn file (.txt)</p>
+                            <input type="file" id="fileInput" accept=".txt" hidden>
+                        </div>
+                        <div class="file-info" id="fileInfo" style="display: none;">
+                            <div class="file-details">
+                                <i class="fas fa-file-alt"></i>
+                                <div>
+                                    <div class="file-name" id="fileName"></div>
+                                    <div class="file-size" id="fileSize"></div>
+                                </div>
+                                <button class="btn-remove-file" id="removeFileBtn">
+                                    <i class="fas fa-times"></i>
+                                </button>
+                            </div>
+                        </div>
+                        <div class="file-tools">
+                            <button class="btn-translate-file" id="translateFileBtn" disabled>
+                                <i class="fas fa-exchange-alt"></i>
+                                <span>Dịch file</span>
+                            </button>
+                        </div>
+                    </div>
+                    <div class="file-output-section">
+                        <div class="section-header">
+                            <h2><i class="fas fa-file-text"></i> Kết quả dịch file</h2>
+                            <div class="file-output-tools">
+                                <button class="btn-download" id="downloadBtn" disabled>
+                                    <i class="fas fa-download"></i> Tải xuống
+                                </button>
+                                <button class="btn-copy" id="copyFileBtn" disabled>
+                                    <i class="fas fa-copy"></i> Copy
+                                </button>
+                            </div>
+                        </div>
+                        <div class="file-output-area" id="fileOutputArea">
+                            <div class="placeholder">
+                                <i class="fas fa-robot"></i>
+                                <p>Kết quả dịch file sẽ hiển thị ở đây...</p>
+                            </div>
+                        </div>
+                        <div class="file-progress" id="fileProgress" style="display: none;">
+                            <div class="progress-bar">
+                                <div class="progress-fill" id="fileProgressFill"></div>
+                            </div>
+                            <div class="progress-text" id="fileProgressText">Đang xử lý...</div>
                         </div>
                     </div>
                 </div>
@@ -120,5 +287,6 @@
     </div>
 
     <script src="script.js"></script>
+    <script src="enhanced-features.js"></script>
 </body>
 </html>

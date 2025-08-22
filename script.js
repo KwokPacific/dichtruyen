@@ -4,12 +4,29 @@ class ChineseTranslator {
         this.translationHistory = JSON.parse(localStorage.getItem('translationHistory') || '[]');
         this.translationCount = parseInt(localStorage.getItem('translationCount') || '0');
         this.currentTheme = localStorage.getItem('theme') || 'light';
+        this.settings = JSON.parse(localStorage.getItem('translationSettings') || '{}');
+        this.sessionId = this.generateSessionId();
+        this.requestCount = 0;
+        
+        // Enhanced Chinese character detection
+        this.chineseRegex = /[\u4e00-\u9fff\u3400-\u4dbf\uf900-\ufaff]/;
+        
+        // Default settings
+        this.defaultSettings = {
+            translationMode: 'novel',
+            preserveFormatting: false,
+            autoSave: true
+        };
+        
+        // Merge with defaults
+        this.settings = { ...this.defaultSettings, ...this.settings };
         
         this.initializeElements();
         this.bindEvents();
         this.loadTheme();
         this.updateStats();
         this.renderHistory();
+        this.loadSettings();
     }
 
     initializeElements() {
@@ -73,10 +90,16 @@ async translateText() {
         return;
     }
 
-    // Kiểm tra có ký tự tiếng Trung không
-    const chineseRegex = /[\u4e00-\u9fff]/;
-    if (!chineseRegex.test(text)) {
+    // Kiểm tra có ký tự tiếng Trung không với regex cải tiến
+    if (!this.chineseRegex.test(text)) {
         this.showToast('Văn bản phải chứa ký tự tiếng Trung', 'error', 'fa-times-circle');
+        return;
+    }
+
+    // Session tracking và rate limiting
+    this.requestCount++;
+    if (this.requestCount > 50) {
+        this.showToast('Đã đạt giới hạn dịch thuật trong phiên', 'warning', 'fa-exclamation-triangle');
         return;
     }
 
@@ -94,7 +117,15 @@ async translateText() {
             headers: {
                 'Content-Type': 'application/json',
             },
-            body: JSON.stringify({ text: text }) // Simplified format
+            body: JSON.stringify({ 
+                text: text,
+                metadata: {
+                    sessionId: this.sessionId,
+                    requestId: Date.now(),
+                    mode: this.settings.translationMode,
+                    preserveFormatting: this.settings.preserveFormatting
+                }
+            })
         });
 
         console.log('Response status:', response.status);
@@ -336,6 +367,94 @@ updateTranslationStats(time, length) {
         const div = document.createElement('div');
         div.textContent = text;
         return div.innerHTML;
+    }
+
+    // Enhanced methods for new features
+    generateSessionId() {
+        return 'session_' + Date.now() + '_' + Math.random().toString(36).substr(2, 9);
+    }
+
+    loadSettings() {
+        if (this.settings.autoSave) {
+            // Apply settings to UI if elements exist
+            const modeSelect = document.getElementById('translationMode');
+            const preserveCheck = document.getElementById('preserveFormatting');
+            const autoSaveCheck = document.getElementById('autoSave');
+            
+            if (modeSelect) modeSelect.value = this.settings.translationMode;
+            if (preserveCheck) preserveCheck.checked = this.settings.preserveFormatting;
+            if (autoSaveCheck) autoSaveCheck.checked = this.settings.autoSave;
+        }
+    }
+
+    saveSettings() {
+        if (this.settings.autoSave) {
+            localStorage.setItem('translationSettings', JSON.stringify(this.settings));
+        }
+    }
+
+    updateSetting(key, value) {
+        this.settings[key] = value;
+        this.saveSettings();
+    }
+
+    // Enhanced input validation with visual feedback
+    validateInput(text) {
+        const validation = {
+            isValid: true,
+            message: '',
+            type: 'success',
+            icon: 'fa-check'
+        };
+
+        if (!text || text.trim().length === 0) {
+            validation.isValid = false;
+            validation.message = 'Vui lòng nhập văn bản cần dịch';
+            validation.type = 'warning';
+            validation.icon = 'fa-exclamation-triangle';
+            return validation;
+        }
+
+        if (!this.chineseRegex.test(text)) {
+            validation.isValid = false;
+            validation.message = 'Văn bản phải chứa ký tự tiếng Trung';
+            validation.type = 'error';
+            validation.icon = 'fa-times-circle';
+            return validation;
+        }
+
+        if (text.length > 5000) {
+            validation.isValid = false;
+            validation.message = 'Văn bản quá dài (tối đa 5000 ký tự)';
+            validation.type = 'error';
+            validation.icon = 'fa-times-circle';
+            return validation;
+        }
+
+        if (text.length > 4500) {
+            validation.message = 'Văn bản gần đạt giới hạn';
+            validation.type = 'warning';
+            validation.icon = 'fa-exclamation-triangle';
+        } else {
+            validation.message = 'Văn bản hợp lệ';
+        }
+
+        return validation;
+    }
+
+    showValidationFeedback(validation, container) {
+        const existingFeedback = container.querySelector('.input-validation');
+        if (existingFeedback) {
+            existingFeedback.remove();
+        }
+
+        const feedback = document.createElement('div');
+        feedback.className = `input-validation validation-${validation.type}`;
+        feedback.innerHTML = `
+            <i class="fas ${validation.icon}"></i>
+            <span>${validation.message}</span>
+        `;
+        container.appendChild(feedback);
     }
 }
 
