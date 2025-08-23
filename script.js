@@ -54,9 +54,9 @@ class ChineseTranslator {
         const count = this.inputText.value.length;
         this.charCount.textContent = count;
         
-        if (count > 4500) {
+        if (count > 45000) {
             this.charCount.style.color = 'var(--error-color)';
-        } else if (count > 4000) {
+        } else if (count > 40000) {
             this.charCount.style.color = 'var(--warning-color)';
         } else {
             this.charCount.style.color = 'var(--text-muted)';
