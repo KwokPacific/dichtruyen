@@ -1,473 +1,351 @@
-const WEBHOOK_URL = window.ENV?.WEBHOOK_URL || 'https://n8n.myaloha.vn/webhook/translate-chinesee';
+class ChineseTranslator {
+    constructor() {
+        this.apiEndpoint = 'https://n8n.myaloha.vn/webhook/translate-chinese'; // Thay đổi URL này
+        this.translationHistory = JSON.parse(localStorage.getItem('translationHistory') || '[]');
+        this.translationCount = parseInt(localStorage.getItem('translationCount') || '0');
+        this.currentTheme = localStorage.getItem('theme') || 'light';
+        
+        this.initializeElements();
+        this.bindEvents();
+        this.loadTheme();
+        this.updateStats();
+        this.renderHistory();
+    }
 
-let selectedFiles = [];
+    initializeElements() {
+        this.inputText = document.getElementById('inputText');
+        this.outputArea = document.getElementById('outputArea');
+        this.translateBtn = document.getElementById('translateBtn');
+        this.clearBtn = document.getElementById('clearBtn');
+        this.copyBtn = document.getElementById('copyBtn');
+        this.charCount = document.getElementById('charCount');
+        this.loadingOverlay = document.getElementById('loadingOverlay');
+        this.themeToggle = document.getElementById('themeToggle');
+        this.translationTime = document.getElementById('translationTime');
+        this.translationLength = document.getElementById('translationLength');
+        this.translationCountEl = document.getElementById('translationCount');
+        this.historyList = document.getElementById('historyList');
+        this.clearHistoryBtn = document.getElementById('clearHistoryBtn');
+        this.toastContainer = document.getElementById('toastContainer');
+    }
 
-// DOM elements  
-const fileUpload = document.getElementById('fileUpload');
-const fileInput = document.getElementById('files');
-const selectedFilesDiv = document.getElementById('selectedFiles');
-const form = document.getElementById('qrForm');
-const submitBtn = document.getElementById('submitBtn');
-const loading = document.getElementById('loading');
-const result = document.getElementById('result');
-const error = document.getElementById('error');
+    bindEvents() {
+        this.inputText.addEventListener('input', () => this.updateCharCount());
+        this.inputText.addEventListener('paste', () => {
+            setTimeout(() => this.updateCharCount(), 0);
+        });
+        
+        this.translateBtn.addEventListener('click', () => this.translateText());
+        this.clearBtn.addEventListener('click', () => this.clearInput());
+        this.copyBtn.addEventListener('click', () => this.copyResult());
+        this.themeToggle.addEventListener('click', () => this.toggleTheme());
+        this.clearHistoryBtn.addEventListener('click', () => this.clearHistory());
 
-// Initialize when DOM is loaded
-document.addEventListener('DOMContentLoaded', function() {
-    initializeEventListeners();
-    addResetButton();
-    console.log('QR Generator initialized for user: KwokPacific');
-});
-
-function initializeEventListeners() {
-    // File upload handling
-    fileUpload.addEventListener('click', () => fileInput.click());
-
-    fileUpload.addEventListener('dragover', (e) => {
-        e.preventDefault();
-        fileUpload.classList.add('dragover');
-    });
-
-    fileUpload.addEventListener('dragleave', (e) => {
-        e.preventDefault();
-        fileUpload.classList.remove('dragover');
-    });
-
-    fileUpload.addEventListener('drop', (e) => {
-        e.preventDefault();
-        fileUpload.classList.remove('dragover');
-        handleFiles(e.dataTransfer.files);
-    });
-
-    fileInput.addEventListener('change', (e) => {
-        handleFiles(e.target.files);
-    });
-
-    // Form submission
-    form.addEventListener('submit', handleFormSubmit);
-    
-    // Keyboard shortcuts
-    document.addEventListener('keydown', (e) => {
-        if (e.ctrlKey && e.key === 'Enter') {
-            e.preventDefault();
-            if (!submitBtn.disabled) {
-                form.dispatchEvent(new Event('submit'));
+        // Enter để dịch (Ctrl+Enter)
+        this.inputText.addEventListener('keydown', (e) => {
+            if (e.ctrlKey && e.key === 'Enter') {
+                e.preventDefault();
+                this.translateText();
             }
-        }
-        if (e.key === 'Escape') {
-            hideMessages();
-        }
-    });
-}
-
-function handleFiles(files) {
-    const maxFileSize = 50 * 1024 * 1024; // 50MB
-    const maxFiles = 10;
-    
-    if (selectedFiles.length + files.length > maxFiles) {
-        showError(`Chỉ được chọn tối đa ${maxFiles} file.`);
-        return;
+        });
     }
-    
-    for (let file of files) {
-        if (file.size > maxFileSize) {
-            showError(`File "${file.name}" quá lớn. Kích thước tối đa là 50MB.`);
-            continue;
-        }
+
+    updateCharCount() {
+        const count = this.inputText.value.length;
+        this.charCount.textContent = count;
         
-        if (!selectedFiles.find(f => f.name === file.name && f.size === file.size)) {
-            selectedFiles.push(file);
+        if (count > 45000) {
+            this.charCount.style.color = 'var(--error-color)';
+        } else if (count > 40000) {
+            this.charCount.style.color = 'var(--warning-color)';
+        } else {
+            this.charCount.style.color = 'var(--text-muted)';
         }
     }
-    displaySelectedFiles();
-    updateSubmitButton();
-}
 
-function displaySelectedFiles() {
-    selectedFilesDiv.innerHTML = '';
-    selectedFiles.forEach((file, index) => {
-        const fileItem = document.createElement('div');
-        fileItem.className = 'file-item';
-        
-        const fileIcon = getFileIcon(file.name);
-        
-        fileItem.innerHTML = `
-            <div class="file-info">
-                <i class="fas fa-${fileIcon}"></i>
-                <span class="file-name">${truncateFileName(file.name, 30)}</span>
-                <span class="file-size">${formatFileSize(file.size)}</span>
-            </div>
-            <button type="button" class="remove-file" onclick="removeFile(${index})" title="Xóa file">
-                <i class="fas fa-times"></i>
-            </button>
-        `;
-        selectedFilesDiv.appendChild(fileItem);
-    });
-}
-
-function getFileIcon(fileName) {
-    const ext = fileName.split('.').pop().toLowerCase();
-    const iconMap = {
-        'pdf': 'file-pdf',
-        'doc': 'file-word', 'docx': 'file-word',
-        'xls': 'file-excel', 'xlsx': 'file-excel',
-        'ppt': 'file-powerpoint', 'pptx': 'file-powerpoint',
-        'jpg': 'file-image', 'jpeg': 'file-image', 'png': 'file-image', 'gif': 'file-image',
-        'mp4': 'file-video', 'avi': 'file-video', 'mov': 'file-video',
-        'mp3': 'file-audio', 'wav': 'file-audio',
-        'zip': 'file-archive', 'rar': 'file-archive', '7z': 'file-archive',
-        'txt': 'file-alt', 'html': 'file-code', 'css': 'file-code', 'js': 'file-code'
-    };
-    return iconMap[ext] || 'file';
-}
-
-function truncateFileName(fileName, maxLength) {
-    if (fileName.length <= maxLength) return fileName;
-    const ext = fileName.split('.').pop();
-    const name = fileName.substring(0, fileName.lastIndexOf('.'));
-    const truncated = name.substring(0, maxLength - ext.length - 4) + '...';
-    return truncated + '.' + ext;
-}
-
-function removeFile(index) {
-    selectedFiles.splice(index, 1);
-    displaySelectedFiles();
-    updateSubmitButton();
-    fileInput.value = '';
-}
-
-function formatFileSize(bytes) {
-    if (bytes === 0) return '0 Bytes';
-    const k = 1024;
-    const sizes = ['Bytes', 'KB', 'MB', 'GB'];
-    const i = Math.floor(Math.log(bytes) / Math.log(k));
-    return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i];
-}
-
-function updateSubmitButton() {
-    const email = document.getElementById('email').value;
-    const hasFiles = selectedFiles.length > 0;
-    const hasEmail = email.length > 0;
+    // Sửa hàm translateText()
+// Sửa hàm translateText()
+async translateText() {
+    const text = this.inputText.value.trim();
     
-    submitBtn.disabled = !(hasFiles && hasEmail);
-}
-
-// Form submission với format đúng cho n8n workflow
-async function handleFormSubmit(e) {
-    e.preventDefault();
-    
-    if (selectedFiles.length === 0) {
-        showError('Vui lòng chọn ít nhất một file để upload.');
+    if (!text) {
+        this.showToast('Vui lòng nhập văn bản cần dịch', 'warning', 'fa-exclamation-triangle');
         return;
     }
 
-    const email = document.getElementById('email').value;
-    const newQR = document.getElementById('newQR').checked;
-
-    if (!validateEmail(email)) {
-        showError('Vui lòng nhập địa chỉ email hợp lệ.');
+    // Kiểm tra có ký tự tiếng Trung không
+    const chineseRegex = /[\u4e00-\u9fff]/;
+    if (!chineseRegex.test(text)) {
+        this.showToast('Văn bản phải chứa ký tự tiếng Trung', 'error', 'fa-times-circle');
         return;
     }
 
-    let controller = new AbortController();
-    const timeoutId = setTimeout(() => controller.abort(), 120000);
+    const startTime = Date.now();
+    this.showLoading(true);
+    this.translateBtn.disabled = true;
 
     try {
-        showLoading(true, 'Đang chuẩn bị dữ liệu...');
-        hideMessages();
-
-        // Chuẩn bị data theo format mà n8n workflow expect
-        const formData = new FormData();
+        // Debug log
+        console.log('Sending request to:', this.apiEndpoint);
+        console.log('Request body:', { text: text });
         
-        // Gửi email trong body như workflow expect: $json.body.email
-        const bodyData = {
-            email: email,
-            newQR: newQR,
-            dateFormatted: new Date().toISOString().split('T')[0],
-            user: 'KwokPacific',
-            timestamp: new Date().toISOString()
-        };
-        
-        // Append body data as JSON string hoặc individual fields
-        Object.keys(bodyData).forEach(key => {
-            formData.append(key, bodyData[key].toString());
-        });
-
-        // Append files
-        selectedFiles.forEach((file, index) => {
-            formData.append('files', file);
-            console.log(`Adding file ${index + 1}: ${file.name} (${file.size} bytes)`);
-        });
-
-        console.log('Sending request with body data:', bodyData);
-        console.log('Total files:', selectedFiles.length);
-
-        showLoading(true, 'Đang gửi dữ liệu đến n8n...');
-
-        const response = await fetch(WEBHOOK_URL, {
+        const response = await fetch(this.apiEndpoint, {
             method: 'POST',
-            body: formData,
-            signal: controller.signal
+            headers: {
+                'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({ text: text }) // Simplified format
         });
-
-        clearTimeout(timeoutId);
 
         console.log('Response status:', response.status);
-        console.log('Response headers:', Object.fromEntries(response.headers.entries()));
+        console.log('Response headers:', response.headers);
 
-        // Get response text first
         const responseText = await response.text();
-        console.log('Raw response:', responseText);
-
-        if (!response.ok) {
-            throw new Error(`HTTP ${response.status}: ${response.statusText}\n\nResponse: ${responseText}`);
-        }
-
-        // Parse response
-        let data;
+        console.log('Response text:', responseText);
+        
+        let result;
         try {
-            data = JSON.parse(responseText);
-        } catch (parseError) {
-            throw new Error(`Invalid JSON response: ${responseText}`);
+            result = JSON.parse(responseText);
+        } catch {
+            result = responseText;
+        }
+        
+        const endTime = Date.now();
+        const duration = ((endTime - startTime) / 1000).toFixed(1);
+
+        if (response.ok && result.success !== false) {
+            const translatedText = result.text || result.translatedText || result;
+            this.displayResult(translatedText);
+            this.updateTranslationStats(duration, translatedText.length);
+            this.addToHistory(text, translatedText);
+            this.showToast('Dịch thành công!', 'success', 'fa-check-circle');
+        } else {
+            throw new Error(result.error?.message || `HTTP ${response.status}: ${response.statusText}`);
         }
 
-        console.log('Parsed response:', data);
-        
-        // Handle response based on n8n workflow behavior
-        if (data.shareLink && data.qrCode) {
-            // Success - got immediate result
-            showResult(data);
-            setTimeout(() => {
-                result.scrollIntoView({ behavior: 'smooth' });
-            }, 300);
-        } else if (data.message === "Workflow was started") {
-            // Workflow started but running async
-            showAsyncWorkflowMessage(email);
-        } else if (data.error) {
-            throw new Error('Workflow error: ' + data.error);
-        } else {
-            // Unknown response format
-            console.warn('Unexpected response format:', data);
-            throw new Error('Unexpected response format: ' + JSON.stringify(data));
-        }
-
-    } catch (err) {
-        clearTimeout(timeoutId);
-        console.error('Request failed:', err);
-        
-        let errorMessage = 'Có lỗi xảy ra khi tạo QR code.\n\n';
-        
-        if (err.name === 'AbortError') {
-            errorMessage += '⏱️ Timeout: Quá trình xử lý mất quá nhiều thời gian.\nVui lòng thử lại.';
-        } else if (err.message.includes('Invalid Value')) {
-            errorMessage += '❌ Lỗi parameter trong n8n workflow.\nVui lòng kiểm tra:\n• Email có đúng format không\n• Workflow có được configure đúng không';
-        } else if (err.message.includes('Bad request')) {
-            errorMessage += '❌ Bad Request từ n8n.\nCó thể do:\n• Format dữ liệu không đúng\n• Missing required parameters\n• Workflow configuration issue';
-        } else if (err.name === 'TypeError' && err.message.includes('fetch')) {
-            errorMessage += '🌐 Không thể kết nối đến n8n server.\nVui lòng kiểm tra:\n• Internet connection\n• n8n server status\n• Webhook URL';
-        } else {
-            errorMessage += '❌ ' + err.message;
-        }
-        
-        showError(errorMessage);
+    } catch (error) {
+        console.error('Translation error:', error);
+        this.showToast(error.message || 'Lỗi kết nối đến server', 'error', 'fa-exclamation-circle');
+        this.displayError(error.message);
     } finally {
-        showLoading(false);
+        this.showLoading(false);
+        this.translateBtn.disabled = false;
     }
 }
 
-function showAsyncWorkflowMessage(email) {
-    showLoading(false);
-    
-    const asyncMessage = `
-🚀 Workflow đã được khởi động thành công!
-
-📧 Kết quả sẽ được gửi đến: ${email}
-
-⏱️ Thời gian xử lý: 2-5 phút
-
-💡 Bạn có thể:
-• Đóng trang này và chờ email
-• Hoặc thử lại sau vài phút để kiểm tra
-
-✉️ Nếu không nhận được email, vui lòng liên hệ Thái Bình Dương
-    `;
-    
-    // Create custom success message
-    const asyncDiv = document.createElement('div');
-    asyncDiv.style.cssText = `
-        margin-top: 25px;
-        padding: 25px;
-        background: linear-gradient(135deg, rgba(0, 123, 255, 0.1), rgba(0, 123, 255, 0.05));
-        border-radius: 15px;
-        border: 2px solid rgba(0, 123, 255, 0.3);
-        color: #0056b3;
-        white-space: pre-line;
-        text-align: left;
-    `;
-    asyncDiv.innerHTML = `
-        <h3 style="color: #0056b3; margin-bottom: 15px;">
-            <i class="fas fa-rocket"></i> Workflow đang chạy...
-        </h3>
-        <div style="font-size: 1em; line-height: 1.6;">
-            ${asyncMessage.replace(/\n/g, '<br>')}
-        </div>
-    `;
-    
-    // Insert after form
-    form.parentNode.insertBefore(asyncDiv, result);
-    
-    // Auto scroll to message
-    setTimeout(() => {
-        asyncDiv.scrollIntoView({ behavior: 'smooth' });
-    }, 300);
-    
-    showNotification('🚀 Workflow đã được khởi động! Kiểm tra email sau vài phút.');
-}
-
-function validateEmail(email) {
-    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-    return emailRegex.test(email);
-}
-
-function showLoading(show, message = 'Đang xử lý...') {
-    loading.style.display = show ? 'block' : 'none';
-    submitBtn.disabled = show;
-    
-    if (show) {
-        submitBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Đang xử lý...';
-        const loadingText = loading.querySelector('p');
-        if (loadingText) {
-            loadingText.textContent = message;
-        }
-    } else {
-        submitBtn.innerHTML = '<i class="fas fa-magic"></i> Tạo QR Code';
-        updateSubmitButton();
+    displayResult(translatedText) {
+        this.outputArea.innerHTML = `<div class="translation-result">${this.escapeHtml(translatedText)}</div>`;
+        this.copyBtn.disabled = false;
     }
-}
 
-function showResult(data) {
-    const qrImage = document.getElementById('qrImage');
-    const shareLink = document.getElementById('shareLink');
-    
-    qrImage.src = `data:image/png;base64,${data.qrCode}`;
-    qrImage.alt = 'QR Code';
-    shareLink.textContent = data.shareLink;
-    
-    // Add click to copy functionality
-    shareLink.addEventListener('click', () => {
-        navigator.clipboard.writeText(data.shareLink).then(() => {
-            showNotification('✅ Đã sao chép link vào clipboard!');
-        }).catch(() => {
+    displayError(message) {
+        this.outputArea.innerHTML = `
+            <div class="error-message">
+                <i class="fas fa-exclamation-triangle"></i>
+                <h3>Có lỗi xảy ra</h3>
+                <p>${this.escapeHtml(message)}</p>
+            </div>
+        `;
+        this.copyBtn.disabled = true;
+    }
+
+    clearInput() {
+        this.inputText.value = '';
+        this.updateCharCount();
+        this.inputText.focus();
+    }
+
+    async copyResult() {
+        const resultText = this.outputArea.querySelector('.translation-result')?.textContent;
+        if (!resultText) return;
+
+        try {
+            await navigator.clipboard.writeText(resultText);
+            this.showToast('Đã sao chép kết quả', 'success', 'fa-copy');
+        } catch (err) {
+            // Fallback cho trình duyệt cũ
             const textArea = document.createElement('textarea');
-            textArea.value = data.shareLink;
+            textArea.value = resultText;
             document.body.appendChild(textArea);
             textArea.select();
             document.execCommand('copy');
             document.body.removeChild(textArea);
-            showNotification('✅ Đã sao chép link!');
-        });
-    });
-    shareLink.style.cursor = 'pointer';
-    shareLink.title = 'Click để sao chép link';
-    
-    result.style.display = 'block';
-    showNotification('🎉 QR Code đã được tạo thành công!');
-}
-
-function showError(message) {
-    const errorMessage = document.getElementById('errorMessage');
-    errorMessage.style.whiteSpace = 'pre-line';
-    errorMessage.textContent = message;
-    error.style.display = 'block';
-    
-    setTimeout(() => {
-        error.style.display = 'none';
-    }, 15000);
-}
-
-function showNotification(message) {
-    const notification = document.createElement('div');
-    notification.style.cssText = `
-        position: fixed;
-        top: 20px;
-        right: 20px;
-        background: linear-gradient(45deg, #28a745, #20c997);
-        color: white;
-        padding: 15px 20px;
-        border-radius: 10px;
-        box-shadow: 0 5px 15px rgba(0,0,0,0.2);
-        z-index: 1000;
-        animation: slideInRight 0.3s ease;
-        max-width: 300px;
-        word-wrap: break-word;
-    `;
-    notification.textContent = message;
-    
-    document.body.appendChild(notification);
-    
-    setTimeout(() => {
-        notification.style.animation = 'slideOutRight 0.3s ease';
-        setTimeout(() => {
-            if (notification.parentNode) {
-                document.body.removeChild(notification);
-            }
-        }, 300);
-    }, 4000);
-}
-
-function hideMessages() {
-    result.style.display = 'none';
-    error.style.display = 'none';
-    
-    // Remove any async workflow messages
-    const asyncMessages = document.querySelectorAll('div[style*="rgba(0, 123, 255"]');
-    asyncMessages.forEach(msg => msg.remove());
-}
-
-function resetForm() {
-    selectedFiles = [];
-    displaySelectedFiles();
-    form.reset();
-    hideMessages();
-    updateSubmitButton();
-    fileInput.value = '';
-    showNotification('🔄 Form đã được làm mới!');
-}
-
-function addResetButton() {
-    const resetBtn = document.createElement('button');
-    resetBtn.type = 'button';
-    resetBtn.className = 'submit-btn reset-btn';
-    resetBtn.innerHTML = '<i class="fas fa-redo"></i> Làm mới';
-    resetBtn.addEventListener('click', resetForm);
-    
-    form.appendChild(resetBtn);
-}
-
-// Email input validation
-document.addEventListener('DOMContentLoaded', function() {
-    const emailInput = document.getElementById('email');
-    emailInput.addEventListener('input', updateSubmitButton);
-    emailInput.addEventListener('blur', function() {
-        if (this.value && !validateEmail(this.value)) {
-            this.style.borderColor = '#dc3545';
-        } else {
-            this.style.borderColor = '#e1e1e1';
+            this.showToast('Đã sao chép kết quả', 'success', 'fa-copy');
         }
-    });
-});
+    }
 
-// Add CSS animations
-const style = document.createElement('style');
-style.textContent = `
-    @keyframes slideInRight {
-        from { transform: translateX(100%); opacity: 0; }
-        to { transform: translateX(0); opacity: 1; }
+    showLoading(show) {
+        if (show) {
+            this.loadingOverlay.classList.add('show');
+        } else {
+            this.loadingOverlay.classList.remove('show');
+        }
     }
+
+    toggleTheme() {
+        this.currentTheme = this.currentTheme === 'light' ? 'dark' : 'light';
+        this.loadTheme();
+        localStorage.setItem('theme', this.currentTheme);
+    }
+
+    loadTheme() {
+        document.documentElement.setAttribute('data-theme', this.currentTheme);
+        const icon = this.themeToggle.querySelector('i');
+        if (this.currentTheme === 'dark') {
+            icon.className = 'fas fa-sun';
+        } else {
+            icon.className = 'fas fa-moon';
+        }
+    }
+
     
-    @keyframes slideOutRight {
-        from { transform: translateX(0); opacity: 1; }
-        to { transform: translateX(100%); opacity: 0; }
+    // Chuẩn hoá mọi kiểu dữ liệu về chuỗi hiển thị
+    toPlainText(value) {
+        if (value === null || value === undefined) return '';
+        if (typeof value === 'string') return value;
+        if (Array.isArray(value)) {
+            return value.map(v => this.toPlainText(v)).join('\n');
+        }
+        if (typeof value === 'object') {
+            // Ưu tiên một số khóa thường gặp
+            const preferredKeys = ['text', 'translatedText', 'result', 'output', 'message', 'content'];
+            for (const k of preferredKeys) {
+                if (typeof value[k] === 'string') return value[k];
+            }
+            // Thử gom các giá trị con là string
+            const collected = Object.values(value).map(v => this.toPlainText(v)).filter(Boolean).join('\n');
+            if (collected) return collected;
+            try { return JSON.stringify(value); } catch { return String(value); }
+        }
+        return String(value);
     }
-`;
-document.head.appendChild(style);
+
+updateTranslationStats(time, length) {
+        this.translationTime.textContent = `${time}s`;
+        this.translationLength.textContent = `${length} ký tự`;
+        this.translationCount++;
+        this.translationCountEl.textContent = this.translationCount;
+        localStorage.setItem('translationCount', this.translationCount.toString());
+    }
+
+    updateStats() {
+        this.translationCountEl.textContent = this.translationCount;
+    }
+
+    addToHistory(originalText, translatedText) {
+        originalText = this.toPlainText(originalText);
+        translatedText = this.toPlainText(translatedText);
+        const historyItem = {
+            id: Date.now(),
+            timestamp: new Date().toLocaleString('vi-VN'),
+            original: originalText.substring(0, 200),
+            translated: translatedText.substring(0, 200),
+            originalFull: originalText,
+            translatedFull: translatedText
+        };
+
+        this.translationHistory.unshift(historyItem);
+        
+        // Giữ tối đa 20 lịch sử
+        if (this.translationHistory.length > 20) {
+            this.translationHistory = this.translationHistory.slice(0, 20);
+        }
+
+        localStorage.setItem('translationHistory', JSON.stringify(this.translationHistory));
+        this.renderHistory();
+    }
+
+    renderHistory() {
+        if (this.translationHistory.length === 0) {
+            this.historyList.innerHTML = `
+                <div class="no-history">
+                    <i class="fas fa-inbox"></i>
+                    <p>Chưa có lịch sử dịch</p>
+                </div>
+            `;
+            return;
+        }
+
+        this.historyList.innerHTML = this.translationHistory.map(item => `
+            <div class="history-item">
+                <div class="history-header">
+                    <span><i class="fas fa-clock"></i> ${item.timestamp}</span>
+                    <button class="btn-history-action" onclick="translator.useHistoryItem(${item.id})">
+                        <i class="fas fa-redo"></i> Sử dụng lại
+                    </button>
+                </div>
+                <div class="history-content">
+                    <div class="history-text">
+                        <strong>Tiếng Trung:</strong><br>
+                        ${this.escapeHtml(item.original)}${item.originalFull.length > 200 ? '...' : ''}
+                    </div>
+                    <div class="history-text">
+                        <strong>Tiếng Việt:</strong><br>
+                        ${this.escapeHtml(item.translated)}${item.translatedFull.length > 200 ? '...' : ''}
+                    </div>
+                </div>
+            </div>
+        `).join('');
+    }
+
+    useHistoryItem(id) {
+        const item = this.translationHistory.find(h => h.id === id);
+        if (item) {
+            this.inputText.value = item.originalFull;
+            this.displayResult(item.translatedFull);
+            this.updateCharCount();
+            this.copyBtn.disabled = false;
+            this.showToast('Đã tải lại từ lịch sử', 'success', 'fa-history');
+            
+            // Scroll to top
+            window.scrollTo({ top: 0, behavior: 'smooth' });
+        }
+    }
+
+    clearHistory() {
+        if (confirm('Bạn có chắc muốn xóa toàn bộ lịch sử dịch?')) {
+            this.translationHistory = [];
+            localStorage.removeItem('translationHistory');
+            this.renderHistory();
+            this.showToast('Đã xóa lịch sử', 'success', 'fa-trash');
+        }
+    }
+
+    showToast(message, type = 'success', icon = 'fa-check') {
+        const toast = document.createElement('div');
+        toast.className = `toast ${type}`;
+        toast.innerHTML = `
+            <i class="fas ${icon}"></i>
+            <span>${this.escapeHtml(message)}</span>
+        `;
+
+        this.toastContainer.appendChild(toast);
+
+        // Auto remove after 4 seconds
+        setTimeout(() => {
+            toast.style.animation = 'slideIn 0.3s ease reverse';
+            setTimeout(() => {
+                if (toast.parentNode) {
+                    toast.parentNode.removeChild(toast);
+                }
+            }, 300);
+        }, 4000);
+    }
+
+    escapeHtml(text) {
+        const div = document.createElement('div');
+        div.textContent = text;
+        return div.innerHTML;
+    }
+}
+
+// Initialize the translator
+const translator = new ChineseTranslator();
+
+// Service Worker for PWA (optional)
+if ('serviceWorker' in navigator) {
+    window.addEventListener('load', () => {
+        navigator.serviceWorker.register('/sw.js')
+            .catch(err => console.log('SW registration failed'));
+    });
+}
