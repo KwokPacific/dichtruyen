@@ -1,4 +1,4 @@
-const WEBHOOK_URL = window.ENV?.WEBHOOK_URL || 'https://n8n.myaloha.vn/webhook/upload-docs';
+const WEBHOOK_URL = window.ENV?.WEBHOOK_URL || 'https://n8n.myaloha.vn/webhook/translate-chinesee';
 
 let selectedFiles = [];
 
